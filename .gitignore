@@ -1,0 +1,6 @@
+# Go 编译产物：题库生成器在本地 go build 即可，二进制不进库
+poolgen/poolgen
+poolgen/*.exe
+
+.DS_Store
+node_modules/

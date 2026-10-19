@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>诗词闯关 · 中国古诗词大赛</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="paper">
+
+  <!-- 首页：难度选择 -->
+  <section id="screen-home" class="screen active">
+    <header class="masthead">
+      <div class="seal">闯关</div>
+      <div class="masthead-text">
+        <h1>中国诗词大赛</h1>
+        <p class="sub">题库取自三十四万首古诗词全集，按用字生僻度、篇幅、体裁与作者流传度自动分级</p>
+      </div>
+    </header>
+
+    <div class="corpus-bar" id="corpus-bar">
+      <span class="dot"></span><span id="corpus-info">正在连接诗词库…</span>
+    </div>
+
+    <div class="levels" id="levels"></div>
+
+    <footer class="home-foot">
+      <div class="daily" id="daily">
+        <div class="daily-head">
+          <strong>随机一诗</strong>
+          <div class="lang-switch" id="lang-switch">
+            <button data-lang="zh-Hans" class="on">简</button>
+            <button data-lang="zh-Hant">繁</button>
+          </div>
+        </div>
+        <div class="daily-body" id="daily-body">—</div>
+      </div>
+      <button class="ghost" id="btn-reset">重置全部进度</button>
+    </footer>
+  </section>
+
+  <!-- 关卡地图 -->
+  <section id="screen-map" class="screen">
+    <div class="nav">
+      <button class="back" data-go="home">← 选难度</button>
+      <h2 id="map-title">关卡</h2>
+      <div class="map-summary" id="map-summary"></div>
+    </div>
+    <div class="stages" id="stages"></div>
+  </section>
+
+  <!-- 答题 -->
+  <section id="screen-quiz" class="screen">
+    <div class="hud">
+      <button class="back small" id="btn-quit">退出</button>
+      <div class="lives" id="lives"></div>
+      <div class="hud-mid">
+        <div class="qmeta"><span id="q-index">第 1 题 / 6</span> · <span id="q-kind">接下句</span></div>
+        <div class="timer"><i id="timer-fill"></i></div>
+      </div>
+      <div class="score-box"><span id="hud-score">0</span><small>分</small></div>
+    </div>
+
+    <div class="combo" id="combo"></div>
+
+    <article class="card" id="question-card">
+      <div class="prompt" id="prompt"></div>
+      <div class="stem" id="stem"></div>
+      <div class="options" id="options"></div>
+    </article>
+
+    <article class="card reveal hidden" id="reveal-card">
+      <div class="reveal-head"><span id="verdict"></span><span class="source" id="reveal-source"></span></div>
+      <div class="poem-lines" id="reveal-poem"></div>
+      <div class="explain" id="reveal-explain"></div>
+      <button class="primary" id="btn-next">下一题 →</button>
+    </article>
+  </section>
+
+  <!-- 结算 -->
+  <section id="screen-result" class="screen">
+    <div class="result-card">
+      <div class="big-seal" id="result-seal">及第</div>
+      <div class="stars" id="result-stars"></div>
+      <h2 id="result-title"></h2>
+      <p class="result-sub" id="result-sub"></p>
+      <div class="result-stats" id="result-stats"></div>
+      <div class="result-actions">
+        <button class="ghost" id="btn-retry">再来一次</button>
+        <button class="primary" id="btn-continue">下一关 →</button>
+        <button class="ghost" data-go="map">选关</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
