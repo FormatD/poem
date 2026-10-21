@@ -25,6 +25,11 @@
 
     <div class="levels" id="levels"></div>
 
+    <div class="browse-nav">
+      <button class="ghost" id="btn-open-tiers">分档书目</button>
+      <button class="ghost" id="btn-open-library">全库检索</button>
+    </div>
+
     <footer class="home-foot">
       <div class="daily" id="daily">
         <div class="daily-head">
@@ -74,6 +79,8 @@
       <div class="reveal-head"><span id="verdict"></span><span class="source" id="reveal-source"></span></div>
       <div class="poem-lines" id="reveal-poem"></div>
       <div class="explain" id="reveal-explain"></div>
+      <div class="notes-head">逐项解析<span class="notes-tip">四个选项各指什么，包括你没选的那几个</span></div>
+      <div class="opt-notes" id="reveal-opts"></div>
       <button class="primary" id="btn-next">下一题 →</button>
     </article>
   </section>
@@ -92,6 +99,51 @@
         <button class="ghost" data-go="map">选关</button>
       </div>
     </div>
+  </section>
+
+  <!-- 分档书目：每一档题库里到底收了哪些诗 -->
+  <section id="screen-tiers" class="screen">
+    <div class="nav">
+      <button class="back" data-go="home">← 选难度</button>
+      <h2>分档书目</h2>
+      <div class="nav-sum" id="tiers-sum"></div>
+    </div>
+    <div class="tabs" id="tiers-tabs"></div>
+    <div class="filter-bar">
+      <input id="tiers-q" type="search" placeholder="在本档题库内检索：标题 / 作者 / 诗句">
+      <select id="tiers-dyn"><option value="">全部朝代</option></select>
+      <select id="tiers-type"><option value="">全部体裁</option></select>
+      <label class="chip"><input type="checkbox" id="tiers-canon"> 只看必背</label>
+      <button class="chip" id="tiers-clear" hidden>清除筛选</button>
+    </div>
+    <div class="list-count" id="tiers-count">…</div>
+    <div class="poem-list" id="tiers-list"></div>
+    <button class="ghost more" id="tiers-more" hidden>加载更多</button>
+  </section>
+
+  <!-- 全库检索：按朝代分组浏览 + 全文搜索（走诗词 API） -->
+  <section id="screen-library" class="screen">
+    <div class="nav">
+      <button class="back" data-go="home">← 选难度</button>
+      <h2>全库检索</h2>
+      <div class="nav-sum" id="lib-sum"></div>
+    </div>
+    <div class="filter-bar">
+      <input id="lib-q" type="search" placeholder="搜索三十四万首：标题 / 正文 / 作者">
+      <select id="lib-field">
+        <option value="all">综合</option>
+        <option value="title">仅标题</option>
+        <option value="content">仅正文</option>
+        <option value="author">仅作者</option>
+      </select>
+      <div class="lang-switch" id="lib-lang">
+        <button data-lang="zh-Hans" class="on">简</button>
+        <button data-lang="zh-Hant">繁</button>
+      </div>
+    </div>
+    <div class="list-count" id="lib-count">…</div>
+    <div id="lib-body"></div>
+    <button class="ghost more" id="lib-more" hidden>加载更多</button>
   </section>
 
 </div>

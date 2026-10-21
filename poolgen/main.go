@@ -145,7 +145,11 @@ func splitSegments(raw string) []segment {
 	out := make([]segment, 0, len(lines)*2)
 	for gi, ln := range lines {
 		// 去掉 [1]、[27] 这类校注角标，避免污染题面
-		ln = dropNotes(ln)
+		runes := []rune(dropNotes(ln))
+		if txt, dot, rest, ok := cutRedup(runes); ok {
+			out = append(out, segment{text: txt, dot: dot, grp: gi})
+			runes = rest
+		}
 		var buf []rune
 		flush := func(dot bool) {
 			if n := len(buf); n >= 3 && n <= 20 {
@@ -153,7 +157,7 @@ func splitSegments(raw string) []segment {
 			}
 			buf = buf[:0]
 		}
-		for _, r := range ln {
+		for _, r := range runes {
 			if isSegPunct(r) {
 				flush(isDotPunct(r))
 				continue
@@ -166,6 +170,27 @@ func splitSegments(raw string) []segment {
 		flush(true)
 	}
 	return out
+}
+
+// cutRedup 把叠字起句整段收成一句：「鹅，鹅，鹅，曲项向天歌」的开头是「鹅鹅鹅」，
+// 不是三个孤立的「鹅」。按标点切完再套 3 字下限，《咏鹅》就只剩「曲项向天歌」起头，
+// 课本里那首诗等于少了第一句。
+func cutRedup(line []rune) (text string, dot bool, rest []rune, ok bool) {
+	if len(line) < 5 || !isHan(line[0]) {
+		return "", false, line, false
+	}
+	i, n := 1, 1
+	for i+1 < len(line) && isSegPunct(line[i]) && !isDotPunct(line[i]) && line[i+1] == line[0] {
+		n++
+		i += 2
+	}
+	if n < 3 {
+		return "", false, line, false
+	}
+	if i >= len(line) {
+		return strings.Repeat(string(line[0]), n), true, nil, true
+	}
+	return strings.Repeat(string(line[0]), n), isDotPunct(line[i]), line[i+1:], true
 }
 
 // 句子最短 3 字、最长 20 字：再短的是叠字或残字，再长的是排版没拆开的整段。
@@ -217,6 +242,7 @@ func main() {
 	rankDir := flag.String("rank", "../../chinese-poetry-api/poetry-data/rank", "知名度数据 rank/ 目录")
 	probe := flag.Int("probe", 0, "打印指定档位里知名度最高的前 N 首，用于人工核对难度是否合适")
 	showCanon := flag.Bool("canon", false, "打印必背清单与库内题名的核对报告")
+	canonAmb := flag.Bool("canonamb", false, "配合 -canon：打印同题多首、需要补首句锚点的清单条目")
 	dumpAu := flag.String("dumpauthor", "", "调试：打印该作者存活到题库里的全部题名")
 	residue := flag.Bool("residue", false, "量一量入库文本里还剩多少个非简体字（t2s 转换后与自身不同的字）")
 	flag.Parse()
@@ -422,7 +448,7 @@ func main() {
 	// 对不上的条目 -canon 会列出来供人工修 canon.go 里的别名或题名。
 	canonRep := assignCanon(all)
 	if *showCanon {
-		canonRep.log()
+		canonRep.log(*canonAmb)
 	}
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -542,7 +568,7 @@ func selectLevel(ranked []*poem, lv levelCfg, profiles map[string]outAuthor) *ou
 	auSeen := map[string]bool{}
 	for _, p := range picked {
 		out.Poems = append(out.Poems, outPoem{
-			ID: p.ID, Title: p.Title, Lines: p.clauses, Auth: p.Auth, Dyn: p.Dyn, Type: p.Type,
+			ID: p.ID, Title: displayTitle(p.Title), Lines: p.clauses, Auth: p.Auth, Dyn: p.Dyn, Type: p.Type,
 			Theme: p.theme, Seas: p.season, Term: string(p.term), Grp: encodeGroups(p.grp),
 			Score: round4(p.score), Fame: round4(p.fameP), Canon: p.canonTier,
 		})
@@ -567,20 +593,29 @@ func selectLevel(ranked []*poem, lv levelCfg, profiles map[string]outAuthor) *ou
 func canonCand(ranked []*poem, lv levelCfg) []*poem {
 	var out []*poem
 	taken := map[int64]bool{}
-	for _, p := range canonPool(ranked, lv.Canon) {
-		if lv.CanonMaxLines > 0 && len(p.clauses) > lv.CanonMaxLines {
+	dups := newVarIndex()
+	// 必背位先去重再入库。同一首诗在语料里常有两个抄本（李白《将进酒》在鼓吹曲辞
+	// 与歌诗里各录一次、王维《使至塞上》另附「又一体」），都收进必背位会让解析里
+	// 出现两条题名相同、正文略异的「标准答案」。题名短的更像课本引法，先收。
+	canon := canonPool(ranked, lv.Canon)
+	sort.SliceStable(canon, func(i, j int) bool { return lessCopy(canon[i], canon[j]) })
+	for _, p := range canon {
+		if lv.CanonMaxLines > 0 && len(p.clauses) > lv.CanonMaxLines || dups.has(p) {
 			continue
 		}
 		taken[p.ID] = true
+		dups.add(p)
 		out = append(out, p)
 	}
+	sortCand(out)
 	if len(out) >= lv.Target {
 		return out
 	}
 	aus := canonAuthors(ranked, lv.Canon)
 	var ext []*poem
 	for _, p := range ranked {
-		if taken[p.ID] || !aus[p.Auth] || p.canonTier > 0 || p.minDF < lv.MinCharDF || !eligible(p, lv) {
+		if taken[p.ID] || !aus[p.Auth] || p.canonTier > 0 || p.minDF < lv.MinCharDF ||
+			!eligible(p, lv) || dups.has(p) {
 			continue
 		}
 		ext = append(ext, p)
@@ -591,14 +626,138 @@ func canonCand(ranked []*poem, lv levelCfg) []*poem {
 		}
 		return ext[i].score < ext[j].score
 	})
-	out = append(out, capByAuthor(ext, lv.Target-len(out), lv.MaxPerAu)...)
+	// 扩池内部同样互相去重：两个抄本都补进来，档位里就会出现标题一样、
+	// 正文差一个字的诗，出题时互为干扰项又没有可解释的差别。
+	uniq := make([]*poem, 0, len(ext))
+	for _, p := range ext {
+		if dups.has(p) {
+			continue
+		}
+		dups.add(p)
+		uniq = append(uniq, p)
+	}
+	out = append(out, capByAuthor(uniq, lv.Target-len(out), lv.MaxPerAu)...)
+	sortCand(out)
+	return out
+}
+
+func sortCand(out []*poem) {
 	sort.Slice(out, func(i, j int) bool {
 		if (out[i].canonTier > 0) != (out[j].canonTier > 0) {
 			return out[i].canonTier > 0
 		}
 		return out[i].score < out[j].score
 	})
-	return out
+}
+
+// varIndex 记下已入库诗的正文，用于识别同一首诗的两个抄本。
+//
+// 两条线索并行：
+//   - 按作者比全文，抓「只差几个字」的异文（杜牧《秋夕》的银烛/红烛）；
+//     题名不同也能抓到，因为异文抄本常被另编一个题名。
+//   - 按「作者 + 剥掉乐府类目后的本题」比，抓同题的抄残本与「又一体」：
+//     白居易《忆江南》五句全本之外还有只存前两句的本子，
+//     王维《使至塞上》的又一体把首句换成「衔命辞天阙」、其余七句照抄，
+//     这两种都离着两个字以上，全文比对抓不住。
+//
+// 不能按正文跨作者去重：王之涣《登鹳雀楼》在《全唐诗》里同时挂在朱斌《登楼》名下，
+// 正文一字不差，去掉后者反而让必背清单点不到名。
+type varIndex struct {
+	byAu map[string][]verse
+	byTi map[string][]string
+}
+
+type verse struct {
+	n int
+	s string
+}
+
+func newVarIndex() varIndex {
+	return varIndex{byAu: map[string][]verse{}, byTi: map[string][]string{}}
+}
+
+func tiKey(p *poem) string { return p.Auth + "\x00" + luofuKey(p.Title) }
+
+func (vi varIndex) add(p *poem) {
+	joined := strings.Join(p.clauses, "")
+	vi.byAu[p.Auth] = append(vi.byAu[p.Auth], verse{n: len(p.clauses), s: joined})
+	vi.byTi[tiKey(p)] = append(vi.byTi[tiKey(p)], joined)
+}
+
+func (vi varIndex) has(p *poem) bool {
+	joined := strings.Join(p.clauses, "")
+	n := len(p.clauses)
+	for _, v := range vi.byAu[p.Auth] {
+		if v.n == n && closeDup(v.s, joined) {
+			return true
+		}
+	}
+	for _, s := range vi.byTi[tiKey(p)] {
+		if s == joined || strings.HasPrefix(s, joined) || strings.HasPrefix(joined, s) ||
+			shareMajority(p.clauses, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// shareMajority 判断候选诗的句是否有三分之二原样出现在同一本题的另一首诗里。
+func shareMajority(clauses []string, other string) bool {
+	shared := 0
+	for _, c := range clauses {
+		if strings.Contains(other, c) {
+			shared++
+		}
+	}
+	n := len(clauses)
+	return shared >= 2 && shared*3 >= n*2
+}
+
+// closeDup 编辑距离不超过 2 就当作同一首诗的两个抄本。
+func closeDup(a, b string) bool {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) > len(rb) {
+		ra, rb = rb, ra
+	}
+	if len(rb)-len(ra) > 2 {
+		return false
+	}
+	return editLE(ra, rb, 2)
+}
+
+// editLE 判断两串的编辑距离是否 ≤ max，超过就提前退出。
+func editLE(a, b []rune, max int) bool {
+	prev := make([]int, len(b)+1)
+	cur := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur[0] = i
+		rowMin := cur[0]
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			d := prev[j] + 1
+			if v := cur[j-1] + 1; v < d {
+				d = v
+			}
+			if v := prev[j-1] + cost; v < d {
+				d = v
+			}
+			cur[j] = d
+			if d < rowMin {
+				rowMin = d
+			}
+		}
+		if rowMin > max {
+			return false
+		}
+		prev, cur = cur, prev
+	}
+	return prev[len(b)] <= max
 }
 
 func (lv levelCfg) canonical() bool { return lv.Canon > 0 }
